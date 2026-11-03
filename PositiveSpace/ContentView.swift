@@ -61,6 +61,16 @@ struct ContentView: View {
     @State private var editingItem: ElementItem? = nil
     @State private var inputTitle = ""
     
+    // 目標・期限の編集用アラート・シート状態
+    @State private var showingEditGoal = false
+    @State private var newGoalText = ""
+    @State private var showingEditDate = false
+    @State private var selectedDate = Date()
+    
+    // 履歴クリア確認アラート用
+    @State private var showingClearPositiveAlert = false
+    @State private var showingClearNegativeAlert = false
+    
     var negativePoints: Int {
         max(0, maxPoints - positivePoints)
     }
@@ -77,7 +87,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { outerGeometry in
-                let halfWidth = outerGeometry.size.width * 0.45 // 画面幅の約半分に設定
+                let halfWidth = outerGeometry.size.width * 0.45
                 
                 VStack(spacing: 12) {
                     // 1. 【固定】目標・期限ヘッダー
@@ -85,11 +95,11 @@ struct ContentView: View {
                         .padding(.horizontal)
                         .padding(.top, 4)
                     
-                    // 2. 【固定】Positive ヘッダー（タイトルを画面幅の半分くらいに調整）
+                    // 2. 【固定】Positive ヘッダー
                     positiveHeaderView(titleWidth: halfWidth)
                         .padding(.horizontal)
                     
-                    // 3. 【スクロール可能】Positive 項目リスト（3列）
+                    // 3. 【スクロール可能】Positive 項目リスト
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 6) {
                             ForEach(positiveItems) { item in
@@ -117,11 +127,11 @@ struct ContentView: View {
                         .padding(.horizontal)
                     }
                     
-                    // 4. 【固定】中央ゲージエリア
+                    // 4. 【固定】中央ゲージエリア（長押しでクリアアラート表示）
                     gaugeSectionView
                         .padding(.horizontal)
                     
-                    // 5. 【スクロール可能】Negative 項目リスト（3列）
+                    // 5. 【スクロール可能】Negative 項目リスト
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 6) {
                             ForEach(negativeItems) { item in
@@ -149,7 +159,7 @@ struct ContentView: View {
                         .padding(.horizontal)
                     }
                     
-                    // 6. 【固定】Negative フッター（タイトルを画面幅の半分くらいに調整）
+                    // 6. 【固定】Negative フッター
                     negativeFooterView(titleWidth: halfWidth)
                         .padding(.horizontal)
                         .padding(.bottom, 8)
@@ -159,6 +169,7 @@ struct ContentView: View {
             .onAppear {
                 setupInitialDataIfNeeded()
             }
+            // 項目編集アラート
             .alert("項目を編集", isPresented: Binding(
                 get: { editingItem != nil },
                 set: { if !$0 { editingItem = nil } }
@@ -183,6 +194,56 @@ struct ContentView: View {
                     inputTitle = ""
                 }
             }
+            // 目標編集アラート
+            .alert("目標を編集", isPresented: $showingEditGoal) {
+                TextField("目標", text: $newGoalText)
+                Button("保存") {
+                    if !newGoalText.isEmpty {
+                        targetGoal = newGoalText
+                    }
+                }
+                Button("キャンセル", role: .cancel) {}
+            }
+            // Positive履歴クリア確認アラート
+            .alert("Positive履歴のクリア", isPresented: $showingClearPositiveAlert) {
+                Button("クリアする", role: .destructive) {
+                    clearHistories(isPositive: true)
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("Positive側の履歴文字をすべてクリアしますか？")
+            }
+            // Negative履歴クリア確認アラート
+            .alert("Negative履歴のクリア", isPresented: $showingClearNegativeAlert) {
+                Button("クリアする", role: .destructive) {
+                    clearHistories(isPositive: false)
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("Negative側の履歴文字をすべてクリアしますか？")
+            }
+            // 日付選択シート
+            .sheet(isPresented: $showingEditDate) {
+                VStack(spacing: 20) {
+                    Text("期限を選択")
+                        .font(.headline)
+                        .padding(.top)
+                    
+                    DatePicker("期限", selection: $selectedDate, displayedComponents: .date)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                    
+                    Button("決定") {
+                        let formatter = DateFormatter()
+                        formatter.dateFormat = "yyyy-MM-dd"
+                        targetDateString = formatter.string(from: selectedDate)
+                        showingEditDate = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.bottom)
+                }
+                .presentationDetents([.medium])
+            }
         }
     }
     
@@ -190,16 +251,30 @@ struct ContentView: View {
     
     private var targetHeaderView: some View {
         VStack(alignment: .center, spacing: 2) {
-            Text("目標 : \(targetGoal)")
-                .font(.headline)
-                .bold()
-            HStack(spacing: 12) {
-                Text("期限 : \(targetDateString)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("(残り : \(remainingDateText))")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            Button(action: {
+                newGoalText = targetGoal
+                showingEditGoal = true
+            }) {
+                Text("目標 : \(targetGoal)")
+                    .font(.headline)
+                    .bold()
+                    .foregroundColor(.primary)
+            }
+            
+            Button(action: {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                selectedDate = formatter.date(from: targetDateString) ?? Date()
+                showingEditDate = true
+            }) {
+                HStack(spacing: 12) {
+                    Text("期限 : \(targetDateString)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("(残り : \(remainingDateText))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -213,7 +288,7 @@ struct ContentView: View {
         return String(format: "%02d/%02d/%02d", max(0, components.year ?? 0), max(0, components.month ?? 0), max(0, components.day ?? 0))
     }
     
-    // Positive ヘッダー（タイトル幅を画面幅の半分に指定）
+    // Positive ヘッダー
     private func positiveHeaderView(titleWidth: CGFloat) -> some View {
         ZStack {
             HStack {
@@ -261,7 +336,7 @@ struct ContentView: View {
         }
     }
     
-    // ゲージエリア
+    // ゲージエリア（それぞれの側を長押しすることでクリアアラートを表示）
     private var gaugeSectionView: some View {
         VStack(spacing: 4) {
             HStack {
@@ -287,40 +362,48 @@ struct ContentView: View {
                 let negativeHistoriesText = histories.filter { !$0.isPositive }.map { $0.title }.joined(separator: " ")
                 
                 HStack(spacing: 4) {
+                    // Positive側ゲージ（長押し対応）
                     ZStack(alignment: .topLeading) {
                         RoundedRectangle(cornerRadius: 8)
                             .fill(Color("PositiveColor"))
                         
                         ScrollView(.vertical, showsIndicators: false) {
                             Text(positiveHistoriesText)
-                                .font(.system(size: 10))
+                                .font(.system(size: 8))
                                 .foregroundColor(.white)
                                 .padding(6)
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     }
-                    .frame(width: max(0, positiveWidth - 2), height: 48)
+                    .frame(width: max(0, positiveWidth - 2), height: 72)
+                    .onLongPressGesture {
+                        showingClearPositiveAlert = true
+                    }
                     
+                    // Negative側ゲージ（長押し対応）
                     ZStack(alignment: .topTrailing) {
                         RoundedRectangle(cornerRadius: 8)
                             .fill(Color("NegativeColor"))
                         
                         ScrollView(.vertical, showsIndicators: false) {
                             Text(negativeHistoriesText)
-                                .font(.system(size: 10))
+                                .font(.system(size: 8))
                                 .foregroundColor(.white)
                                 .padding(6)
                                 .frame(maxWidth: .infinity, alignment: .topTrailing)
                         }
                     }
-                    .frame(width: max(0, negativeWidth - 2), height: 48)
+                    .frame(width: max(0, negativeWidth - 2), height: 72)
+                    .onLongPressGesture {
+                        showingClearNegativeAlert = true
+                    }
                 }
             }
-            .frame(height: 48)
+            .frame(height: 72)
         }
     }
     
-    // Negative フッター（タイトル幅を画面幅の半分に指定）
+    // Negative フッター
     private func negativeFooterView(titleWidth: CGFloat) -> some View {
         ZStack {
             HStack {
@@ -375,6 +458,7 @@ struct ContentView: View {
             Button(action: onTap) {
                 Text(item.title)
                     .font(.caption)
+                    .bold()
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .foregroundColor(isPositiveStyle ? Color("PositiveColor") : Color("NegativeColor"))
@@ -442,6 +526,17 @@ struct ContentView: View {
                 }
             }
             selectedNegativeIDs.removeAll()
+        }
+    }
+    
+    // 指定した側の履歴データを一括削除する
+    private func clearHistories(isPositive: Bool) {
+        withAnimation {
+            for history in histories {
+                if history.isPositive == isPositive {
+                    modelContext.delete(history)
+                }
+            }
         }
     }
     
