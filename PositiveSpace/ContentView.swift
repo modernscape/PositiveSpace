@@ -133,16 +133,6 @@ struct ContentView: View {
                 let halfWidth = fullWidth * 0.45
                 
                 ZStack {
-                    // ★ 追加：背景の余白部分をタップしたら選択をすべて解除する
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation {
-                                selectedPositiveIDs.removeAll()
-                                selectedNegativeIDs.removeAll()
-                            }
-                        }
-                    
                     VStack(spacing: 12) {
                         // 1. 目標・期限ヘッダー
                         targetHeaderView
@@ -153,7 +143,7 @@ struct ContentView: View {
                         positiveHeaderView(titleWidth: halfWidth)
                             .padding(.horizontal)
                         
-                        // 3. Positive 項目リスト
+                        // 3. Positive 項目リスト（背景タップで選択解除対応）
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 6) {
                                 ForEach(positiveItems) { item in
@@ -181,12 +171,18 @@ struct ContentView: View {
                             .padding(.horizontal)
                             .padding(.top, 4)
                         }
+                        .contentShape(Rectangle()) // ScrollView全体の空白部分をタップ判定領域にする
+                        .onTapGesture {
+                            withAnimation {
+                                selectedPositiveIDs.removeAll()
+                            }
+                        }
                         
                         // 4. 中央ゲージエリア
                         gaugeSectionView
                             .padding(.horizontal)
                         
-                        // 5. Negative 項目リスト
+                        // 5. Negative 項目リスト（背景タップで選択解除対応）
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 6) {
                                 ForEach(negativeItems) { item in
@@ -213,6 +209,12 @@ struct ContentView: View {
                             }
                             .padding(.horizontal)
                             .padding(.top, 4)
+                        }
+                        .contentShape(Rectangle()) // ScrollView全体の空白部分をタップ判定領域にする
+                        .onTapGesture {
+                            withAnimation {
+                                selectedNegativeIDs.removeAll()
+                            }
                         }
                         
                         // 6. Negative フッター
@@ -557,13 +559,13 @@ struct ContentView: View {
         }
     }
     
-    // 共通項目セル（文字サイズベース16、右下の数字は角から3px離して配置）
+    // 共通項目セル
     @ViewBuilder
     private func itemCell(item: ElementItem, isPositiveStyle: Bool, isSelected: Bool, onTap: @escaping () -> Void, onLongPress: @escaping () -> Void) -> some View {
         Button(action: onTap) {
             ZStack(alignment: .bottomTrailing) {
                 Text(item.title)
-                    .font(.system(size: 16, weight: .bold)) // ★ 文字サイズベースを16に変更
+                    .font(.system(size: 16, weight: .bold))
                     .lineLimit(1...2)
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.6)
@@ -575,7 +577,7 @@ struct ContentView: View {
                     Text("\(item.count)")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(isPositiveStyle ? Color("PositiveColor").opacity(0.8) : Color("NegativeColor").opacity(0.8))
-                        .padding(3) // ★ 右下の角から3px離すためのパディング
+                        .padding(3)
                 }
             }
             .frame(height: 42)
@@ -711,7 +713,7 @@ struct ContentView: View {
             }
         }
         if negativeItems.isEmpty {
-            let defaults = ["ノイズ", "短い睡眠", "反応적", "硬い", "時間がかかる", "コンフォートゾーン", "プロクラスティネーション", "モノが多い", "散漫", "利己", "頭でっかち", "退屈", "混雑"]
+            let defaults = ["ノイズ", "短い睡眠", "反応的", "硬い", "時間がかかる", "コンフォートゾーン", "プロクラスティネーション", "モノが多い", "散漫", "利己", "頭でっかち", "退屈", "混雑"]
             for title in defaults {
                 modelContext.insert(ElementItem(title: title, isPositive: false))
             }
