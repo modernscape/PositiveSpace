@@ -75,6 +75,10 @@ struct ContentView: View {
     @State private var selectedPositiveIDs: Set<PersistentIdentifier> = []
     @State private var selectedNegativeIDs: Set<PersistentIdentifier> = []
     
+    // ★ 追加: 選択された順番を正確に保持する配列
+    @State private var selectedOrderIDs: [PersistentIdentifier] = []
+    @State private var cachedPreviewImageData: Data? = nil
+    
     // 追加モーダル用
     @State private var showingAddPositive = false
     @State private var showingAddNegative = false
@@ -98,8 +102,11 @@ struct ContentView: View {
     // アニメーション用
     @State private var flyingItems: [FlyingItem] = []
     
-    // チュートリアル表示フラグ（初回は自動表示）
+    // チュートリアル表示フラグ
     @State private var showingTutorialOverlay = false
+    
+
+
     
     var negativePoints: Int {
         max(0, maxPoints - positivePoints)
@@ -113,20 +120,63 @@ struct ContentView: View {
         ]
     }
     
-    // 選択されている項目の中で、最後に選ばれた画像付き項目を特定する
+
+
+    
+    // 正しい選択順序を管理する配列を利用したプレビュー判定
     private var activePreviewImageData: Data? {
-        if let lastID = selectedPositiveIDs.sorted(by: { String(describing: $0) < String(describing: $1) }).last,
-           let item = positiveItems.first(where: { $0.persistentModelID == lastID }),
-           let data = item.imageData {
-            return data
+        for id in selectedOrderIDs.reversed() {
+            if let item = positiveItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
+                return data
+            }
+            if let item = negativeItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
+                return data
+            }
         }
-        if let lastID = selectedNegativeIDs.sorted(by: { String(describing: $0) < String(describing: $1) }).last,
-           let item = negativeItems.first(where: { $0.persistentModelID == lastID }),
-           let data = item.imageData {
-            return data
+        
+        if selectedOrderIDs.isEmpty {
+            return nil
         }
-        return nil
+        return cachedPreviewImageData
     }
+    
+    // Positive項目のタップ切替
+    private func togglePositiveSelection(id: PersistentIdentifier) {
+        if selectedPositiveIDs.contains(id) {
+            selectedPositiveIDs.remove(id)
+            selectedOrderIDs.removeAll(where: { $0 == id })
+        } else {
+            selectedPositiveIDs.insert(id)
+            selectedOrderIDs.append(id) // 最後に選んだものを末尾に追加
+            if let item = positiveItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
+                cachedPreviewImageData = data
+            }
+        }
+        if selectedPositiveIDs.isEmpty && selectedNegativeIDs.isEmpty {
+            cachedPreviewImageData = nil
+            selectedOrderIDs.removeAll()
+        }
+    }
+    
+    // Negative項目のタップ切替
+    private func toggleNegativeSelection(id: PersistentIdentifier) {
+        if selectedNegativeIDs.contains(id) {
+            selectedNegativeIDs.remove(id)
+            selectedOrderIDs.removeAll(where: { $0 == id })
+        } else {
+            selectedNegativeIDs.insert(id)
+            selectedOrderIDs.append(id) // 最後に選んだものを末尾に追加
+            if let item = negativeItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
+                cachedPreviewImageData = data
+            }
+        }
+        if selectedPositiveIDs.isEmpty && selectedNegativeIDs.isEmpty {
+            cachedPreviewImageData = nil
+            selectedOrderIDs.removeAll()
+        }
+    }
+    
+    
     
     var body: some View {
         NavigationStack {
@@ -137,7 +187,7 @@ struct ContentView: View {
                 
                 ZStack {
                     VStack(spacing: 12) {
-                        // 1. 目標・期限ヘッダー（右上に "pad.header" アイコンのボタンを配置）
+                        // 1. 目標・期限ヘッダー（右上に "text.pad.header" アイコンのボタンを配置）
                         ZStack(alignment: .trailing) {
                             targetHeaderView
                                 .frame(maxWidth: .infinity)
@@ -147,11 +197,10 @@ struct ContentView: View {
                                     showingTutorialOverlay = true
                                 }
                             }) {
-
-//                                Image(systemName: "text.pad.header")
-//                                    .font(.system(size: 22))
-//                                    .foregroundColor(.primary.opacity(0.7))
-//                                    .padding(.trailing, 4)
+                                Image(systemName: "text.pad.header")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.primary.opacity(0.7))
+                                    .padding(.trailing, 4)
                             }
                         }
                         .padding(.horizontal)
@@ -166,11 +215,7 @@ struct ContentView: View {
                             LazyVGrid(columns: columns, spacing: 6) {
                                 ForEach(positiveItems) { item in
                                     itemCell(item: item, isPositiveStyle: true, isSelected: selectedPositiveIDs.contains(item.persistentModelID)) {
-                                        if selectedPositiveIDs.contains(item.persistentModelID) {
-                                            selectedPositiveIDs.remove(item.persistentModelID)
-                                        } else {
-                                            selectedPositiveIDs.insert(item.persistentModelID)
-                                        }
+                                        togglePositiveSelection(id: item.persistentModelID)
                                     } onLongPress: {
                                         editingItem = item
                                         inputTitle = item.title
@@ -193,6 +238,9 @@ struct ContentView: View {
                         .onTapGesture {
                             withAnimation {
                                 selectedPositiveIDs.removeAll()
+                                selectedNegativeIDs.removeAll()
+                                selectedOrderIDs.removeAll() // リセット
+                                cachedPreviewImageData = nil
                             }
                         }
                         
@@ -205,11 +253,7 @@ struct ContentView: View {
                             LazyVGrid(columns: columns, spacing: 6) {
                                 ForEach(negativeItems) { item in
                                     itemCell(item: item, isPositiveStyle: false, isSelected: selectedNegativeIDs.contains(item.persistentModelID)) {
-                                        if selectedNegativeIDs.contains(item.persistentModelID) {
-                                            selectedNegativeIDs.remove(item.persistentModelID)
-                                        } else {
-                                            selectedNegativeIDs.insert(item.persistentModelID)
-                                        }
+                                        toggleNegativeSelection(id: item.persistentModelID)
                                     } onLongPress: {
                                         editingItem = item
                                         inputTitle = item.title
@@ -231,7 +275,9 @@ struct ContentView: View {
                         .contentShape(Rectangle())
                         .onTapGesture {
                             withAnimation {
+                                selectedPositiveIDs.removeAll()
                                 selectedNegativeIDs.removeAll()
+                                cachedPreviewImageData = nil
                             }
                         }
                         
@@ -241,13 +287,13 @@ struct ContentView: View {
                             .padding(.bottom, 8)
                     }
                     
-                    // ── 選択された項目の画像を画面左上に表示 ──
+                    // ── 選択された項目の画像を画面左上に表示（角丸なし・白ボーダーなし） ──
                     VStack {
                         HStack {
                             if let data = activePreviewImageData, let uiImage = UIImage(data: data) {
                                 Image(uiImage: uiImage)
                                     .resizable()
-                                    .scaledToFill()
+                                    .scaledToFit()
                                     .frame(width: 50, height: 50)
                                     .clipped()
                                     .shadow(radius: 4)
@@ -269,7 +315,6 @@ struct ContentView: View {
                     )
                 }
             }
-            // ★ GeometryReaderやメインレイアウトの外側（最前面のZStack内）にチュートリアルを配置することで、下の画面がズレるのを完全に防止
             .overlay(
                 Group {
                     if showingTutorialOverlay {
@@ -282,7 +327,6 @@ struct ContentView: View {
                                     }
                                 }
                             
-                            // 下からせり上がるチュートリアルカード
                             TutorialCardView {
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                     showingTutorialOverlay = false
@@ -297,7 +341,6 @@ struct ContentView: View {
             .navigationBarHidden(true)
             .onAppear {
                 setupInitialDataIfNeeded()
-                // 初回起動時のみ自動でせり上がらせる
                 if !hasSeenTutorial {
                     showingTutorialOverlay = true
                     hasSeenTutorial = true
@@ -364,7 +407,7 @@ struct ContentView: View {
                     
                     Button("決定") {
                         let formatter = DateFormatter()
-                        formatter.dateFormat = "yyyy/MM/dd"
+                        formatter.dateFormat = "yyyy/MM/dd" // /区切りでフォーマット
                         targetDateString = formatter.string(from: selectedDate)
                         showingEditDate = false
                     }
@@ -636,6 +679,7 @@ struct ContentView: View {
         
         withAnimation {
             selectedPositiveIDs.removeAll()
+            cachedPreviewImageData = nil
         }
         
         let totalDuration = Double(max(0, titlesToFly.count - 1)) * 0.12 + 0.45
@@ -664,6 +708,7 @@ struct ContentView: View {
                 }
             }
             selectedPositiveIDs.removeAll()
+            if selectedNegativeIDs.isEmpty { cachedPreviewImageData = nil }
         }
     }
     
@@ -674,6 +719,7 @@ struct ContentView: View {
         
         withAnimation {
             selectedNegativeIDs.removeAll()
+            cachedPreviewImageData = nil
         }
         
         let totalDuration = Double(max(0, titlesToFly.count - 1)) * 0.12 + 0.45
@@ -702,6 +748,7 @@ struct ContentView: View {
                 }
             }
             selectedNegativeIDs.removeAll()
+            if selectedPositiveIDs.isEmpty { cachedPreviewImageData = nil }
         }
     }
     
@@ -757,13 +804,13 @@ struct ContentView: View {
     }
 }
 
-// MARK: - 一枚のビューとして下からせり上がるチュートリアルカード
+// MARK: - チュートリアルカードビュー
 struct TutorialCardView: View {
     var onClose: () -> Void
     
     var body: some View {
         ZStack {
-            // 背景の画像（"Tutorial Image"）
+            // アセット名 "Tutorial Image" の画像を背景に敷く
             Image("Tutorial Image")
                 .resizable()
                 .scaledToFill()
@@ -785,7 +832,7 @@ struct TutorialCardView: View {
                     .shadow(radius: 2)
             }
         }
-        .ignoresSafeArea() // ★ 画面全体を覆うように修正
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture {
             onClose()
@@ -816,22 +863,25 @@ struct ElementManagementView: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(filteredItems) { item in
                         ZStack(alignment: .bottom) {
-                            if let data = item.imageData, let uiImage = UIImage(data: data) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(height: 90)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            } else {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(.systemGray5))
-                                    .frame(height: 90)
-                                    .overlay(
-                                        Image(systemName: "photo")
-                                            .foregroundColor(.gray)
-                                    )
+                            // ★ GeometryReaderでセルの正確な幅・高さを取得し、確実にはみ出しを防ぐ
+                            GeometryReader { geo in
+                                if let data = item.imageData, let uiImage = UIImage(data: data) {
+                                    Image(uiImage: uiImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geo.size.width, height: geo.size.height)
+                                        .clipped()
+                                } else {
+                                    Rectangle()
+                                        .fill(Color(.systemGray5))
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.gray)
+                                        )
+                                }
                             }
                             
+                            // タイトルラベル
                             Text(item.title)
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(.white)
@@ -843,6 +893,8 @@ struct ElementManagementView: View {
                                 .cornerRadius(6)
                                 .padding(4)
                         }
+                        .frame(height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 12)) // マス全体を角丸で綺麗にマスク
                         .contentShape(Rectangle())
                         .onTapGesture {
                             editingItem = item
