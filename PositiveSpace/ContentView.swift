@@ -31,6 +31,14 @@ class HistoryItem {
     }
 }
 
+// 飛んでいくアニメーション用のデータ構造
+struct FlyingItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let isPositive: Bool
+    var isAnimating: Bool = false
+}
+
 // MARK: - メインビュー
 
 struct ContentView: View {
@@ -47,8 +55,9 @@ struct ContentView: View {
     
     // データ保存
     @AppStorage("targetGoal") private var targetGoal = "月収100万円"
-    @AppStorage("targetDateString") private var targetDateString = "2026-12-31"
+    @AppStorage("targetDateString") private var targetDateString = "2026/12/31"
     @AppStorage("positivePoints") private var positivePoints: Int = 0
+    @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
     let maxPoints: Int = 200
     
     // 選択中のIDセット
@@ -71,6 +80,9 @@ struct ContentView: View {
     @State private var showingClearPositiveAlert = false
     @State private var showingClearNegativeAlert = false
     
+    // アニメーション用：飛んでいく項目のリスト
+    @State private var flyingItems: [FlyingItem] = []
+    
     var negativePoints: Int {
         max(0, maxPoints - positivePoints)
     }
@@ -87,89 +99,143 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { outerGeometry in
-                let halfWidth = outerGeometry.size.width * 0.45
+                let fullWidth = outerGeometry.size.width
+                let fullHeight = outerGeometry.size.height
+                let halfWidth = fullWidth * 0.45
                 
-                VStack(spacing: 12) {
-                    // 1. 【固定】目標・期限ヘッダー
-                    targetHeaderView
-                        .padding(.horizontal)
-                        .padding(.top, 4)
-                    
-                    // 2. 【固定】Positive ヘッダー
-                    positiveHeaderView(titleWidth: halfWidth)
-                        .padding(.horizontal)
-                    
-                    // 3. 【スクロール可能】Positive 項目リスト
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 6) {
-                            ForEach(positiveItems) { item in
-                                itemCell(item: item, isPositiveStyle: true, isSelected: selectedPositiveIDs.contains(item.persistentModelID)) {
-                                    if selectedPositiveIDs.contains(item.persistentModelID) {
-                                        selectedPositiveIDs.remove(item.persistentModelID)
-                                    } else {
-                                        selectedPositiveIDs.insert(item.persistentModelID)
+                ZStack {
+                    VStack(spacing: 12) {
+                        // 1. 【固定】目標・期限ヘッダー
+                        targetHeaderView
+                            .padding(.horizontal)
+                            .padding(.top, 4)
+                        
+                        // 2. 【固定】Positive ヘッダー
+                        positiveHeaderView(titleWidth: halfWidth)
+                            .padding(.horizontal)
+                        
+                        // 3. 【スクロール可能】Positive 項目リスト
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 6) {
+                                ForEach(positiveItems) { item in
+                                    itemCell(item: item, isPositiveStyle: true, isSelected: selectedPositiveIDs.contains(item.persistentModelID)) {
+                                        if selectedPositiveIDs.contains(item.persistentModelID) {
+                                            selectedPositiveIDs.remove(item.persistentModelID)
+                                        } else {
+                                            selectedPositiveIDs.insert(item.persistentModelID)
+                                        }
+                                    } onLongPress: {
+                                        editingItem = item
+                                        inputTitle = item.title
                                     }
-                                } onEdit: {
-                                    editingItem = item
-                                    inputTitle = item.title
+                                }
+                                
+                                Button(action: { showingAddPositive = true }) {
+                                    Image(systemName: "plus")
+                                        .foregroundColor(Color("PositiveColor"))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 36)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(8)
                                 }
                             }
-                            
-                            Button(action: { showingAddPositive = true }) {
-                                Image(systemName: "plus")
-                                    .foregroundColor(Color("PositiveColor"))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 36)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(8)
-                            }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
-                    }
-                    
-                    // 4. 【固定】中央ゲージエリア（長押しでクリアアラート表示）
-                    gaugeSectionView
-                        .padding(.horizontal)
-                    
-                    // 5. 【スクロール可能】Negative 項目リスト
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 6) {
-                            ForEach(negativeItems) { item in
-                                itemCell(item: item, isPositiveStyle: false, isSelected: selectedNegativeIDs.contains(item.persistentModelID)) {
-                                    if selectedNegativeIDs.contains(item.persistentModelID) {
-                                        selectedNegativeIDs.remove(item.persistentModelID)
-                                    } else {
-                                        selectedNegativeIDs.insert(item.persistentModelID)
+                        
+                        // 4. 【固定】中央ゲージエリア
+                        gaugeSectionView
+                            .padding(.horizontal)
+                        
+                        // 5. 【スクロール可能】Negative 項目リスト
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 6) {
+                                ForEach(negativeItems) { item in
+                                    itemCell(item: item, isPositiveStyle: false, isSelected: selectedNegativeIDs.contains(item.persistentModelID)) {
+                                        if selectedNegativeIDs.contains(item.persistentModelID) {
+                                            selectedNegativeIDs.remove(item.persistentModelID)
+                                        } else {
+                                            selectedNegativeIDs.insert(item.persistentModelID)
+                                        }
+                                    } onLongPress: {
+                                        editingItem = item
+                                        inputTitle = item.title
                                     }
-                                } onEdit: {
-                                    editingItem = item
-                                    inputTitle = item.title
+                                }
+                                
+                                Button(action: { showingAddNegative = true }) {
+                                    Image(systemName: "plus")
+                                        .foregroundColor(Color("NegativeColor"))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 36)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(8)
                                 }
                             }
-                            
-                            Button(action: { showingAddNegative = true }) {
-                                Image(systemName: "plus")
-                                    .foregroundColor(Color("NegativeColor"))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 36)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(8)
-                            }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
+                        
+                        // 6. 【固定】Negative フッター
+                        negativeFooterView(titleWidth: halfWidth)
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
                     }
                     
-                    // 6. 【固定】Negative フッター
-                    negativeFooterView(titleWidth: halfWidth)
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
+                    // ── 飛んでいくテキストのアニメーション用オーバーレイ ──
+                    ForEach(flyingItems) { item in
+                        let startX: CGFloat = item.isPositive ? fullWidth * 0.5 : fullWidth * 0.25
+                        let startY: CGFloat = item.isPositive ? fullHeight * 0.18 : fullHeight * 0.88
+                        
+                        let targetX: CGFloat = item.isPositive ? fullWidth * 0.25 : fullWidth * 0.75
+                        let targetY: CGFloat = item.isPositive ? fullHeight * 0.35 : fullHeight * 0.45
+                        
+                        Text(item.title)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(item.isPositive ? Color("PositiveColor") : Color("NegativeColor"))
+                            .cornerRadius(12)
+                            .shadow(radius: 3)
+                            .position(
+                                x: item.isAnimating ? targetX : startX,
+                                y: item.isAnimating ? targetY : startY
+                            )
+                            .scaleEffect(item.isAnimating ? 0.4 : 1.2)
+                            .opacity(item.isAnimating ? 0.0 : 1.0)
+                            .animation(.easeOut(duration: 0.45), value: item.isAnimating)
+                    }
+                    
+                    // ── 初回起動時チュートリアル画像オーバーレイ ──
+                    if !hasSeenTutorial {
+                        ZStack {
+                            Color.black.opacity(0.8)
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation {
+                                        hasSeenTutorial = true
+                                    }
+                                }
+                            
+                            VStack(spacing: 20) {
+                                Text("「Positive Space」へようこそ！")
+                                    .font(.title2)
+                                    .bold()
+                                    .foregroundColor(.white)
+                                
+                                Text("画面をタップしてスタート")
+                                    .font(.subheadline)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                        .zIndex(999)
+                    }
                 }
             }
             .navigationBarHidden(true)
             .onAppear {
                 setupInitialDataIfNeeded()
             }
-            // 項目編集アラート
+            // 各種アラート・シート
             .alert("項目を編集", isPresented: Binding(
                 get: { editingItem != nil },
                 set: { if !$0 { editingItem = nil } }
@@ -194,7 +260,6 @@ struct ContentView: View {
                     inputTitle = ""
                 }
             }
-            // 目標編集アラート
             .alert("目標を編集", isPresented: $showingEditGoal) {
                 TextField("目標", text: $newGoalText)
                 Button("保存") {
@@ -204,7 +269,6 @@ struct ContentView: View {
                 }
                 Button("キャンセル", role: .cancel) {}
             }
-            // Positive履歴クリア確認アラート
             .alert("Positive履歴のクリア", isPresented: $showingClearPositiveAlert) {
                 Button("クリアする", role: .destructive) {
                     clearHistories(isPositive: true)
@@ -213,7 +277,6 @@ struct ContentView: View {
             } message: {
                 Text("Positive側の履歴文字をすべてクリアしますか？")
             }
-            // Negative履歴クリア確認アラート
             .alert("Negative履歴のクリア", isPresented: $showingClearNegativeAlert) {
                 Button("クリアする", role: .destructive) {
                     clearHistories(isPositive: false)
@@ -222,7 +285,6 @@ struct ContentView: View {
             } message: {
                 Text("Negative側の履歴文字をすべてクリアしますか？")
             }
-            // 日付選択シート
             .sheet(isPresented: $showingEditDate) {
                 VStack(spacing: 20) {
                     Text("期限を選択")
@@ -235,7 +297,7 @@ struct ContentView: View {
                     
                     Button("決定") {
                         let formatter = DateFormatter()
-                        formatter.dateFormat = "yyyy-MM-dd"
+                        formatter.dateFormat = "yyyy/MM/dd"
                         targetDateString = formatter.string(from: selectedDate)
                         showingEditDate = false
                     }
@@ -256,24 +318,25 @@ struct ContentView: View {
                 showingEditGoal = true
             }) {
                 Text("目標 : \(targetGoal)")
-                    .font(.headline)
-                    .bold()
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.primary)
             }
             
             Button(action: {
                 let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.dateFormat = "yyyy/MM/dd"
                 selectedDate = formatter.date(from: targetDateString) ?? Date()
                 showingEditDate = true
             }) {
                 HStack(spacing: 12) {
                     Text("期限 : \(targetDateString)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.subheadline)
+                        .bold()
+                        .foregroundColor(.primary)
                     Text("(残り : \(remainingDateText))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.subheadline)
+                        .bold()
+                        .foregroundColor(.primary)
                 }
             }
         }
@@ -282,7 +345,7 @@ struct ContentView: View {
     
     private var remainingDateText: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.dateFormat = "yyyy/MM/dd"
         guard let targetDate = formatter.date(from: targetDateString) else { return "00/00/00" }
         let components = Calendar.current.dateComponents([.year, .month, .day], from: Date(), to: targetDate)
         return String(format: "%02d/%02d/%02d", max(0, components.year ?? 0), max(0, components.month ?? 0), max(0, components.day ?? 0))
@@ -296,7 +359,7 @@ struct ContentView: View {
                     applyPositiveDecreaseAction()
                 }) {
                     Image(systemName: "minus.circle.fill")
-                        .font(.title2)
+                        .font(.system(size: 30))
                         .foregroundColor(.gray)
                 }
                 .disabled(selectedPositiveIDs.isEmpty)
@@ -308,7 +371,7 @@ struct ContentView: View {
                     applyPositiveIncreaseAction()
                 }) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 44))
+                        .font(.system(size: 66))
                         .foregroundColor(Color("PositiveColor"))
                 }
                 .disabled(selectedPositiveIDs.isEmpty)
@@ -316,11 +379,15 @@ struct ContentView: View {
             }
             
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color("PositiveColor"))
+                .fill(Color(.systemBackground))
                 .frame(width: titleWidth, height: 40)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color("PositiveColor"), lineWidth: 2)
+                )
             
             Text("Positive")
-                .foregroundColor(.white)
+                .foregroundColor(Color("PositiveColor"))
                 .bold()
         }
         .frame(maxWidth: .infinity)
@@ -336,7 +403,7 @@ struct ContentView: View {
         }
     }
     
-    // ゲージエリア（それぞれの側を長押しすることでクリアアラートを表示）
+    // ゲージエリア（文字サイズを 10 に変更）
     private var gaugeSectionView: some View {
         VStack(spacing: 4) {
             HStack {
@@ -362,14 +429,14 @@ struct ContentView: View {
                 let negativeHistoriesText = histories.filter { !$0.isPositive }.map { $0.title }.joined(separator: " ")
                 
                 HStack(spacing: 4) {
-                    // Positive側ゲージ（長押し対応）
+                    // Positive側ゲージ
                     ZStack(alignment: .topLeading) {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 4)
                             .fill(Color("PositiveColor"))
                         
                         ScrollView(.vertical, showsIndicators: false) {
                             Text(positiveHistoriesText)
-                                .font(.system(size: 8))
+                                .font(.system(size: 10)) // 文字サイズ10に変更
                                 .foregroundColor(.white)
                                 .padding(6)
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -380,14 +447,14 @@ struct ContentView: View {
                         showingClearPositiveAlert = true
                     }
                     
-                    // Negative側ゲージ（長押し対応）
+                    // Negative側ゲージ
                     ZStack(alignment: .topTrailing) {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 4)
                             .fill(Color("NegativeColor"))
                         
                         ScrollView(.vertical, showsIndicators: false) {
                             Text(negativeHistoriesText)
-                                .font(.system(size: 8))
+                                .font(.system(size: 10)) // 文字サイズ10に変更
                                 .foregroundColor(.white)
                                 .padding(6)
                                 .frame(maxWidth: .infinity, alignment: .topTrailing)
@@ -411,7 +478,7 @@ struct ContentView: View {
                     applyNegativeDecreaseAction()
                 }) {
                     Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 44))
+                        .font(.system(size: 66))
                         .foregroundColor(Color("NegativeColor"))
                 }
                 .disabled(selectedNegativeIDs.isEmpty)
@@ -423,7 +490,7 @@ struct ContentView: View {
                     applyNegativeIncreaseAction()
                 }) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.title2)
+                        .font(.system(size: 30))
                         .foregroundColor(.gray)
                 }
                 .disabled(selectedNegativeIDs.isEmpty)
@@ -431,11 +498,15 @@ struct ContentView: View {
             }
             
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color("NegativeColor"))
+                .fill(Color(.systemBackground))
                 .frame(width: titleWidth, height: 40)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color("NegativeColor"), lineWidth: 2)
+                )
             
             Text("Negative")
-                .foregroundColor(.white)
+                .foregroundColor(Color("NegativeColor"))
                 .bold()
         }
         .frame(maxWidth: .infinity)
@@ -453,37 +524,32 @@ struct ContentView: View {
     
     // 共通項目セル
     @ViewBuilder
-    private func itemCell(item: ElementItem, isPositiveStyle: Bool, isSelected: Bool, onTap: @escaping () -> Void, onEdit: @escaping () -> Void) -> some View {
-        HStack(spacing: 2) {
-            Button(action: onTap) {
-                Text(item.title)
-                    .font(.caption)
-                    .bold()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .foregroundColor(isPositiveStyle ? Color("PositiveColor") : Color("NegativeColor"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            
-            Button(action: onEdit) {
-                Image(systemName: "pencil")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
+    private func itemCell(item: ElementItem, isPositiveStyle: Bool, isSelected: Bool, onTap: @escaping () -> Void, onLongPress: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
+            Text(item.title)
+                .font(.body)
+                .bold()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundColor(isPositiveStyle ? Color("PositiveColor") : Color("NegativeColor"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 8)
-        .background(isSelected ? (isPositiveStyle ? Color("PositiveColor").opacity(0.15) : Color("NegativeColor").opacity(0.15)) : Color(.systemGray6))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? (isPositiveStyle ? Color("PositiveColor") : Color("NegativeColor")) : Color.clear, lineWidth: 1.5)
+        .buttonStyle(OriginalStyleHighlightableButtonStyle(isSelected: isSelected, isPositiveStyle: isPositiveStyle))
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5)
+                .onEnded { _ in
+                    onLongPress()
+                }
         )
     }
     
-    // MARK: - アクション処理
+    // MARK: - アクション処理（アニメーション付き）
     
     private func applyPositiveIncreaseAction() {
+        let titlesToFly = positiveItems.filter { selectedPositiveIDs.contains($0.persistentModelID) }.map { $0.title }
+        
         withAnimation {
             for id in selectedPositiveIDs {
                 if let item = positiveItems.first(where: { $0.persistentModelID == id }) {
@@ -493,12 +559,14 @@ struct ContentView: View {
             }
             selectedPositiveIDs.removeAll()
         }
+        
+        triggerFlyingAnimation(titles: titlesToFly, isPositive: true)
     }
     
     private func applyPositiveDecreaseAction() {
         withAnimation {
             for id in selectedPositiveIDs {
-                if let item = positiveItems.first(where: { $0.persistentModelID == id }) {
+                if let _ = positiveItems.first(where: { $0.persistentModelID == id }) {
                     if positivePoints > 0 { positivePoints -= 1 }
                 }
             }
@@ -507,6 +575,8 @@ struct ContentView: View {
     }
     
     private func applyNegativeDecreaseAction() {
+        let titlesToFly = negativeItems.filter { selectedNegativeIDs.contains($0.persistentModelID) }.map { $0.title }
+        
         withAnimation {
             for id in selectedNegativeIDs {
                 if let item = negativeItems.first(where: { $0.persistentModelID == id }) {
@@ -516,16 +586,37 @@ struct ContentView: View {
             }
             selectedNegativeIDs.removeAll()
         }
+        
+        triggerFlyingAnimation(titles: titlesToFly, isPositive: false)
     }
     
     private func applyNegativeIncreaseAction() {
         withAnimation {
             for id in selectedNegativeIDs {
-                if let item = negativeItems.first(where: { $0.persistentModelID == id }) {
+                // エラーの原因となっていた未使用の item 定義を解消
+                if negativeItems.contains(where: { $0.persistentModelID == id }) {
                     if positivePoints > 0 { positivePoints -= 1 }
                 }
             }
             selectedNegativeIDs.removeAll()
+        }
+    }
+    
+    // 飛ぶアニメーションの生成・消去
+    private func triggerFlyingAnimation(titles: [String], isPositive: Bool) {
+        for title in titles {
+            let flyingItem = FlyingItem(title: title, isPositive: isPositive)
+            flyingItems.append(flyingItem)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                if let index = flyingItems.firstIndex(where: { $0.id == flyingItem.id }) {
+                    flyingItems[index].isAnimating = true
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                flyingItems.removeAll(where: { $0.id == flyingItem.id })
+            }
         }
     }
     
@@ -553,5 +644,46 @@ struct ContentView: View {
                 modelContext.insert(ElementItem(title: title, isPositive: false))
             }
         }
+    }
+}
+
+// MARK: - 選択時は従来の色、長押し（プレス）時のみ ActiveColor を使用するボタンスタイル
+struct OriginalStyleHighlightableButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    let isPositiveStyle: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        let baseColor = isPositiveStyle ? Color("PositiveColor") : Color("NegativeColor")
+        let activeColor = Color("ActiveColor")
+        
+        let backgroundColor: Color = {
+            if configuration.isPressed {
+                return activeColor.opacity(0.3) // 長押し/プレス時のみ ActiveColor
+            } else if isSelected {
+                return baseColor.opacity(0.15) // 選択時は従来の色
+            } else {
+                return Color(.systemGray6)
+            }
+        }()
+        
+        let strokeColor: Color = {
+            if configuration.isPressed {
+                return activeColor
+            } else if isSelected {
+                return baseColor
+            } else {
+                return Color.clear
+            }
+        }()
+        
+        return configuration.label
+            .background(backgroundColor)
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(strokeColor, lineWidth: 1.5)
+            )
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
