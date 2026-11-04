@@ -74,8 +74,6 @@ struct ContentView: View {
     // 選択中のIDセット
     @State private var selectedPositiveIDs: Set<PersistentIdentifier> = []
     @State private var selectedNegativeIDs: Set<PersistentIdentifier> = []
-    
-    // ★ 追加: 選択された順番を正確に保持する配列
     @State private var selectedOrderIDs: [PersistentIdentifier] = []
     @State private var cachedPreviewImageData: Data? = nil
     
@@ -105,9 +103,6 @@ struct ContentView: View {
     // チュートリアル表示フラグ
     @State private var showingTutorialOverlay = false
     
-
-
-    
     var negativePoints: Int {
         max(0, maxPoints - positivePoints)
     }
@@ -120,10 +115,7 @@ struct ContentView: View {
         ]
     }
     
-
-
-    
-    // 正しい選択順序を管理する配列を利用したプレビュー判定
+    // 最後に選択された項目の画像を維持するロジック
     private var activePreviewImageData: Data? {
         for id in selectedOrderIDs.reversed() {
             if let item = positiveItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
@@ -139,44 +131,6 @@ struct ContentView: View {
         }
         return cachedPreviewImageData
     }
-    
-    // Positive項目のタップ切替
-    private func togglePositiveSelection(id: PersistentIdentifier) {
-        if selectedPositiveIDs.contains(id) {
-            selectedPositiveIDs.remove(id)
-            selectedOrderIDs.removeAll(where: { $0 == id })
-        } else {
-            selectedPositiveIDs.insert(id)
-            selectedOrderIDs.append(id) // 最後に選んだものを末尾に追加
-            if let item = positiveItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
-                cachedPreviewImageData = data
-            }
-        }
-        if selectedPositiveIDs.isEmpty && selectedNegativeIDs.isEmpty {
-            cachedPreviewImageData = nil
-            selectedOrderIDs.removeAll()
-        }
-    }
-    
-    // Negative項目のタップ切替
-    private func toggleNegativeSelection(id: PersistentIdentifier) {
-        if selectedNegativeIDs.contains(id) {
-            selectedNegativeIDs.remove(id)
-            selectedOrderIDs.removeAll(where: { $0 == id })
-        } else {
-            selectedNegativeIDs.insert(id)
-            selectedOrderIDs.append(id) // 最後に選んだものを末尾に追加
-            if let item = negativeItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
-                cachedPreviewImageData = data
-            }
-        }
-        if selectedPositiveIDs.isEmpty && selectedNegativeIDs.isEmpty {
-            cachedPreviewImageData = nil
-            selectedOrderIDs.removeAll()
-        }
-    }
-    
-    
     
     var body: some View {
         NavigationStack {
@@ -197,7 +151,7 @@ struct ContentView: View {
                                     showingTutorialOverlay = true
                                 }
                             }) {
-                                Image(systemName: "text.pad.header")
+                                Image(systemName: "document.circle.fill") //
                                     .font(.system(size: 22))
                                     .foregroundColor(.primary.opacity(0.7))
                                     .padding(.trailing, 4)
@@ -239,7 +193,7 @@ struct ContentView: View {
                             withAnimation {
                                 selectedPositiveIDs.removeAll()
                                 selectedNegativeIDs.removeAll()
-                                selectedOrderIDs.removeAll() // リセット
+                                selectedOrderIDs.removeAll()
                                 cachedPreviewImageData = nil
                             }
                         }
@@ -277,6 +231,7 @@ struct ContentView: View {
                             withAnimation {
                                 selectedPositiveIDs.removeAll()
                                 selectedNegativeIDs.removeAll()
+                                selectedOrderIDs.removeAll()
                                 cachedPreviewImageData = nil
                             }
                         }
@@ -287,13 +242,13 @@ struct ContentView: View {
                             .padding(.bottom, 8)
                     }
                     
-                    // ── 選択された項目の画像を画面左上に表示（角丸なし・白ボーダーなし） ──
+                    // ── 選択された項目の画像を画面左上に表示 ──
                     VStack {
                         HStack {
                             if let data = activePreviewImageData, let uiImage = UIImage(data: data) {
                                 Image(uiImage: uiImage)
                                     .resizable()
-                                    .scaledToFit()
+                                    .scaledToFill()
                                     .frame(width: 50, height: 50)
                                     .clipped()
                                     .shadow(radius: 4)
@@ -401,13 +356,18 @@ struct ContentView: View {
                         .font(.headline)
                         .padding(.top)
                     
-                    DatePicker("期限", selection: $selectedDate, displayedComponents: .date)
+                    DatePicker("期限", selection: $selectedDate, in: Date()..., displayedComponents: .date)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
+                        .environment(\.locale, Locale(identifier: "ja_JP")) // ★ ここを追加して日本語に固定する
                     
                     Button("決定") {
                         let formatter = DateFormatter()
-                        formatter.dateFormat = "yyyy/MM/dd" // /区切りでフォーマット
+                        formatter.dateFormat = "yyyy/MM/dd"
+                        // ★ 実機の地域設定に依存しないよう、明示的にロケールとカレンダーを設定する
+                        formatter.locale = Locale(identifier: "ja_JP")
+                        formatter.calendar = Calendar(identifier: .gregorian)
+                        
                         targetDateString = formatter.string(from: selectedDate)
                         showingEditDate = false
                     }
@@ -422,6 +382,41 @@ struct ContentView: View {
             .sheet(isPresented: $showingNegativeListModal) {
                 ElementManagementView(isPositive: false)
             }
+        }
+    }
+    
+    // MARK: - 選択処理ヘルパー
+    private func togglePositiveSelection(id: PersistentIdentifier) {
+        if selectedPositiveIDs.contains(id) {
+            selectedPositiveIDs.remove(id)
+            selectedOrderIDs.removeAll(where: { $0 == id })
+        } else {
+            selectedPositiveIDs.insert(id)
+            selectedOrderIDs.append(id)
+            if let item = positiveItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
+                cachedPreviewImageData = data
+            }
+        }
+        if selectedPositiveIDs.isEmpty && selectedNegativeIDs.isEmpty {
+            cachedPreviewImageData = nil
+            selectedOrderIDs.removeAll()
+        }
+    }
+    
+    private func toggleNegativeSelection(id: PersistentIdentifier) {
+        if selectedNegativeIDs.contains(id) {
+            selectedNegativeIDs.remove(id)
+            selectedOrderIDs.removeAll(where: { $0 == id })
+        } else {
+            selectedNegativeIDs.insert(id)
+            selectedOrderIDs.append(id)
+            if let item = negativeItems.first(where: { $0.persistentModelID == id }), let data = item.imageData {
+                cachedPreviewImageData = data
+            }
+        }
+        if selectedPositiveIDs.isEmpty && selectedNegativeIDs.isEmpty {
+            cachedPreviewImageData = nil
+            selectedOrderIDs.removeAll()
         }
     }
     
@@ -449,22 +444,43 @@ struct ContentView: View {
                         .font(.subheadline)
                         .bold()
                         .foregroundColor(.primary)
-                    Text("(残り : \(remainingDateText))")
+                    Text("(残り: \(remainingDateText))")
                         .font(.subheadline)
                         .bold()
-                        .foregroundColor(.primary)
+                        .foregroundColor(.secondary)
                 }
             }
         }
         .frame(maxWidth: .infinity)
     }
     
+    // 残り日数を「◯年◯月◯日」形式にし、0の項目は省略する
     private var remainingDateText: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy/MM/dd"
-        guard let targetDate = formatter.date(from: targetDateString) else { return "00/00/00" }
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        
+        guard let targetDate = formatter.date(from: targetDateString) else { return "0日" }
+        
         let components = Calendar.current.dateComponents([.year, .month, .day], from: Date(), to: targetDate)
-        return String(format: "%02d/%02d/%02d", max(0, components.year ?? 0), max(0, components.month ?? 0), max(0, components.day ?? 0))
+        let years = max(0, components.year ?? 0)
+        let months = max(0, components.month ?? 0)
+        let days = max(0, components.day ?? 0)
+        
+        var parts: [String] = []
+        if years > 0 {
+            parts.append("\(years)年")
+        }
+        if months > 0 {
+            parts.append("\(months)ヶ月")
+        }
+        // 日数が 0 でも、年・月・日すべてが 0 の場合は「0日」と表示させるため parts.isEmpty を考慮
+        if days > 0 || parts.isEmpty {
+            parts.append("\(days)日")
+        }
+        
+        return parts.joined()
     }
     
     private func positiveHeaderView(titleWidth: CGFloat) -> some View {
@@ -489,19 +505,22 @@ struct ContentView: View {
                 .opacity(selectedPositiveIDs.isEmpty ? 0.3 : 1.0)
             }
             
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.systemBackground))
-                .frame(width: titleWidth, height: 40)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color("PositiveColor"), lineWidth: 2)
-                )
-            
+            // 全体が確実にボタンとして反応するPositiveタイトルボタン
             Button(action: { showingPositiveListModal = true }) {
                 Text("Positive")
                     .foregroundColor(Color("PositiveColor"))
                     .bold()
+                    .frame(width: titleWidth, height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color(.systemBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(Color("PositiveColor"), lineWidth: 2)
+                            )
+                    )
             }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .alert("ポジティブ要素を追加", isPresented: $showingAddPositive) {
@@ -598,19 +617,22 @@ struct ContentView: View {
                 .opacity(selectedNegativeIDs.isEmpty ? 0.3 : 1.0)
             }
             
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.systemBackground))
-                .frame(width: titleWidth, height: 40)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color("NegativeColor"), lineWidth: 2)
-                )
-            
+            // 全体が確実にボタンとして反応するNegativeタイトルボタン
             Button(action: { showingNegativeListModal = true }) {
                 Text("Negative")
                     .foregroundColor(Color("NegativeColor"))
                     .bold()
+                    .frame(width: titleWidth, height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color(.systemBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(Color("NegativeColor"), lineWidth: 2)
+                            )
+                    )
             }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .alert("ネガティブ要素を追加", isPresented: $showingAddNegative) {
@@ -670,8 +692,6 @@ struct ContentView: View {
         )
     }
     
-    // MARK: - アクション処理
-    
     private func applyPositiveIncreaseAction() {
         let targets = positiveItems.filter { selectedPositiveIDs.contains($0.persistentModelID) }
         let titlesToFly = targets.map { $0.title }
@@ -679,11 +699,11 @@ struct ContentView: View {
         
         withAnimation {
             selectedPositiveIDs.removeAll()
+            selectedOrderIDs.removeAll()
             cachedPreviewImageData = nil
         }
         
         let totalDuration = Double(max(0, titlesToFly.count - 1)) * 0.12 + 0.45
-        
         triggerSequentialFlyingAnimation(titles: titlesToFly, isPositive: true)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration) {
@@ -708,6 +728,7 @@ struct ContentView: View {
                 }
             }
             selectedPositiveIDs.removeAll()
+            selectedOrderIDs.removeAll()
             if selectedNegativeIDs.isEmpty { cachedPreviewImageData = nil }
         }
     }
@@ -719,11 +740,11 @@ struct ContentView: View {
         
         withAnimation {
             selectedNegativeIDs.removeAll()
+            selectedOrderIDs.removeAll()
             cachedPreviewImageData = nil
         }
         
         let totalDuration = Double(max(0, titlesToFly.count - 1)) * 0.12 + 0.45
-        
         triggerSequentialFlyingAnimation(titles: titlesToFly, isPositive: false)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration) {
@@ -748,6 +769,7 @@ struct ContentView: View {
                 }
             }
             selectedNegativeIDs.removeAll()
+            selectedOrderIDs.removeAll()
             if selectedPositiveIDs.isEmpty { cachedPreviewImageData = nil }
         }
     }
@@ -758,10 +780,8 @@ struct ContentView: View {
         
         for (index, title) in titles.enumerated() {
             let delay = Double(index) * 0.12
-            
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 feedbackGenerator.impactOccurred()
-                
                 let flyingItem = FlyingItem(title: title, isPositive: isPositive)
                 flyingItems.append(flyingItem)
                 
@@ -810,7 +830,6 @@ struct TutorialCardView: View {
     
     var body: some View {
         ZStack {
-            // アセット名 "Tutorial Image" の画像を背景に敷く
             Image("Tutorial Image")
                 .resizable()
                 .scaledToFill()
@@ -840,7 +859,7 @@ struct TutorialCardView: View {
     }
 }
 
-// MARK: - 項目一覧・管理画面（モーダルビュー）
+// MARK: - 項目一覧・管理画面（元に戻した安定版）
 struct ElementManagementView: View {
     let isPositive: Bool
     @Environment(\.modelContext) private var modelContext
@@ -863,25 +882,22 @@ struct ElementManagementView: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(filteredItems) { item in
                         ZStack(alignment: .bottom) {
-                            // ★ GeometryReaderでセルの正確な幅・高さを取得し、確実にはみ出しを防ぐ
-                            GeometryReader { geo in
-                                if let data = item.imageData, let uiImage = UIImage(data: data) {
-                                    Image(uiImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: geo.size.width, height: geo.size.height)
-                                        .clipped()
-                                } else {
-                                    Rectangle()
-                                        .fill(Color(.systemGray5))
-                                        .overlay(
-                                            Image(systemName: "photo")
-                                                .foregroundColor(.gray)
-                                        )
-                                }
+                            if let data = item.imageData, let uiImage = UIImage(data: data) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(height: 90)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            } else {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.systemGray5))
+                                    .frame(height: 90)
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .foregroundColor(.gray)
+                                    )
                             }
                             
-                            // タイトルラベル
                             Text(item.title)
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(.white)
@@ -893,8 +909,6 @@ struct ElementManagementView: View {
                                 .cornerRadius(6)
                                 .padding(4)
                         }
-                        .frame(height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12)) // マス全体を角丸で綺麗にマスク
                         .contentShape(Rectangle())
                         .onTapGesture {
                             editingItem = item
@@ -1001,7 +1015,7 @@ struct ElementDetailEditView: View {
     }
 }
 
-// MARK: - 完全に独立したアニメーション専用のフローティングレイヤー
+// MARK: - フローティングレイヤー
 struct IndependentFlyingAnimationOverlay: View {
     let flyingItems: [FlyingItem]
     let containerSize: CGSize
@@ -1011,7 +1025,6 @@ struct IndependentFlyingAnimationOverlay: View {
             ForEach(flyingItems) { item in
                 let startX: CGFloat = containerSize.width * 0.5
                 let startY: CGFloat = item.isPositive ? containerSize.height * 0.16 : containerSize.height * 0.84
-                
                 let targetX: CGFloat = containerSize.width * 0.5
                 let targetY: CGFloat = item.isPositive ? containerSize.height * 0.42 : containerSize.height * 0.52
                 
