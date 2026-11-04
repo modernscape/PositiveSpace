@@ -98,6 +98,9 @@ struct ContentView: View {
     // アニメーション用
     @State private var flyingItems: [FlyingItem] = []
     
+    // チュートリアル表示フラグ（初回は自動表示）
+    @State private var showingTutorialOverlay = false
+    
     var negativePoints: Int {
         max(0, maxPoints - positivePoints)
     }
@@ -134,16 +137,31 @@ struct ContentView: View {
                 
                 ZStack {
                     VStack(spacing: 12) {
-                        // 1. 目標・期限ヘッダー
-                        targetHeaderView
-                            .padding(.horizontal)
-                            .padding(.top, 4)
+                        // 1. 目標・期限ヘッダー（右上に "pad.header" アイコンのボタンを配置）
+                        ZStack(alignment: .trailing) {
+                            targetHeaderView
+                                .frame(maxWidth: .infinity)
+                            
+                            Button(action: {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    showingTutorialOverlay = true
+                                }
+                            }) {
+
+//                                Image(systemName: "text.pad.header")
+//                                    .font(.system(size: 22))
+//                                    .foregroundColor(.primary.opacity(0.7))
+//                                    .padding(.trailing, 4)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 4)
                         
                         // 2. Positive ヘッダー
                         positiveHeaderView(titleWidth: halfWidth)
                             .padding(.horizontal)
                         
-                        // 3. Positive 項目リスト（背景タップで選択解除対応）
+                        // 3. Positive 項目リスト
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 6) {
                                 ForEach(positiveItems) { item in
@@ -171,7 +189,7 @@ struct ContentView: View {
                             .padding(.horizontal)
                             .padding(.top, 4)
                         }
-                        .contentShape(Rectangle()) // ScrollView全体の空白部分をタップ判定領域にする
+                        .contentShape(Rectangle())
                         .onTapGesture {
                             withAnimation {
                                 selectedPositiveIDs.removeAll()
@@ -182,7 +200,7 @@ struct ContentView: View {
                         gaugeSectionView
                             .padding(.horizontal)
                         
-                        // 5. Negative 項目リスト（背景タップで選択解除対応）
+                        // 5. Negative 項目リスト
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 6) {
                                 ForEach(negativeItems) { item in
@@ -210,7 +228,7 @@ struct ContentView: View {
                             .padding(.horizontal)
                             .padding(.top, 4)
                         }
-                        .contentShape(Rectangle()) // ScrollView全体の空白部分をタップ判定領域にする
+                        .contentShape(Rectangle())
                         .onTapGesture {
                             withAnimation {
                                 selectedNegativeIDs.removeAll()
@@ -223,7 +241,7 @@ struct ContentView: View {
                             .padding(.bottom, 8)
                     }
                     
-                    // ── 選択された項目の画像を画面左上に表示（角丸なし・白ボーダーなし） ──
+                    // ── 選択された項目の画像を画面左上に表示 ──
                     VStack {
                         HStack {
                             if let data = activePreviewImageData, let uiImage = UIImage(data: data) {
@@ -249,36 +267,41 @@ struct ContentView: View {
                         flyingItems: flyingItems,
                         containerSize: CGSize(width: fullWidth, height: fullHeight)
                     )
-                    
-                    // チュートリアル
-                    if !hasSeenTutorial {
+                }
+            }
+            // ★ GeometryReaderやメインレイアウトの外側（最前面のZStack内）にチュートリアルを配置することで、下の画面がズレるのを完全に防止
+            .overlay(
+                Group {
+                    if showingTutorialOverlay {
                         ZStack {
-                            Color.black.opacity(0.8)
+                            Color.black.opacity(0.5)
                                 .ignoresSafeArea()
                                 .onTapGesture {
-                                    withAnimation {
-                                        hasSeenTutorial = true
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        showingTutorialOverlay = false
                                     }
                                 }
                             
-                            VStack(spacing: 20) {
-                                Text("「Positive Space」へようこそ！")
-                                    .font(.title2)
-                                    .bold()
-                                    .foregroundColor(.white)
-                                
-                                Text("画面をタップしてスタート")
-                                    .font(.subheadline)
-                                    .foregroundColor(.white.opacity(0.8))
+                            // 下からせり上がるチュートリアルカード
+                            TutorialCardView {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    showingTutorialOverlay = false
+                                }
                             }
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         .zIndex(999)
                     }
                 }
-            }
+            )
             .navigationBarHidden(true)
             .onAppear {
                 setupInitialDataIfNeeded()
+                // 初回起動時のみ自動でせり上がらせる
+                if !hasSeenTutorial {
+                    showingTutorialOverlay = true
+                    hasSeenTutorial = true
+                }
             }
             .alert("項目を編集", isPresented: Binding(
                 get: { editingItem != nil },
@@ -564,6 +587,19 @@ struct ContentView: View {
     private func itemCell(item: ElementItem, isPositiveStyle: Bool, isSelected: Bool, onTap: @escaping () -> Void, onLongPress: @escaping () -> Void) -> some View {
         Button(action: onTap) {
             ZStack(alignment: .bottomTrailing) {
+                if item.imageData != nil {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Image(systemName: "photo.circle")
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray.opacity(0.6))
+                                .padding(3)
+                            Spacer()
+                        }
+                    }
+                }
+                
                 Text(item.title)
                     .font(.system(size: 16, weight: .bold))
                     .lineLimit(1...2)
@@ -717,6 +753,42 @@ struct ContentView: View {
             for title in defaults {
                 modelContext.insert(ElementItem(title: title, isPositive: false))
             }
+        }
+    }
+}
+
+// MARK: - 一枚のビューとして下からせり上がるチュートリアルカード
+struct TutorialCardView: View {
+    var onClose: () -> Void
+    
+    var body: some View {
+        ZStack {
+            // 背景の画像（"Tutorial Image"）
+            Image("Tutorial Image")
+                .resizable()
+                .scaledToFill()
+                .ignoresSafeArea()
+            
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 20) {
+                Text("「Positive Space」へようこそ！")
+                    .font(.title2)
+                    .bold()
+                    .foregroundColor(.white)
+                    .shadow(radius: 2)
+                
+                Text("画面をタップして閉じる")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.9))
+                    .shadow(radius: 2)
+            }
+        }
+        .ignoresSafeArea() // ★ 画面全体を覆うように修正
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onClose()
         }
     }
 }
