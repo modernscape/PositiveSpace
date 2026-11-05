@@ -248,7 +248,7 @@ struct ContentView: View {
                             if let data = activePreviewImageData, let uiImage = UIImage(data: data) {
                                 Image(uiImage: uiImage)
                                     .resizable()
-                                    .scaledToFill()
+                                    .scaledToFit()
                                     .frame(width: 50, height: 50)
                                     .clipped()
                                     .shadow(radius: 4)
@@ -656,7 +656,7 @@ struct ContentView: View {
                     VStack {
                         Spacer()
                         HStack {
-                            Image(systemName: "photo.circle")
+                            Image(systemName: "photo.circle.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(.gray.opacity(0.6))
                                 .padding(3)
@@ -883,11 +883,27 @@ struct ElementManagementView: View {
                     ForEach(filteredItems) { item in
                         ZStack(alignment: .bottom) {
                             if let data = item.imageData, let uiImage = UIImage(data: data) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(height: 90)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                GeometryReader { geometry in
+                                    Image(uiImage: uiImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(
+                                            width: geometry.size.width,
+                                            height: 90
+                                        )
+                                        .clipped()
+                                        .cornerRadius(12)
+                                }
+                                .frame(height: 90)
+         
+                                
+//                                Image(uiImage: uiImage)
+//                                    .resizable()
+//                                    .scaledToFit()
+//                                    .frame(width: 50, height: 50)
+//                                    .clipped()
+//                                    .shadow(radius: 4)
+//                                    .transition(.scale.combined(with: .opacity))
                             } else {
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(Color(.systemGray5))
