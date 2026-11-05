@@ -658,21 +658,39 @@ struct ContentView: View {
     private func itemCell(item: ElementItem, isPositiveStyle: Bool, isSelected: Bool, onTap: @escaping () -> Void, onLongPress: @escaping () -> Void) -> some View {
         Button(action: onTap) {
             ZStack(alignment: .bottomTrailing) {
-                if item.imageData != nil {
+//                if item.imageData != nil {
+//                    VStack {
+//                        Spacer()
+//                        HStack {
+//                            Image(systemName: "photo.circle.fill")
+//                                .font(.system(size: 10))
+//                                .foregroundColor(.gray.opacity(0.6))
+//                                .padding(3)
+//                            Spacer()
+//                        }
+//                    }
+//                }
+                
+                // 画像データが存在し、正しくUIImageに変換できる場合のみサムネイルを表示
+                if let data = item.imageData, let uiImage = UIImage(data: data) {
                     VStack {
                         Spacer()
                         HStack {
-                            Image(systemName: "photo.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.gray.opacity(0.6))
-                                .padding(3)
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 15, height: 15) // 小さなサムネイルのサイズ
+                                .clipShape(Circle())          // 丸くクリップ
+                                .padding(4)                   // セルの端からの余白
+                                .opacity(0.7)
                             Spacer()
                         }
                     }
                 }
-                
+//
                 Text(item.title)
                     .font(.system(size: 16, weight: .bold))
+                    .shadow(color: .white, radius: 1.5) // ★ 白いシャドウを追加して輪郭を際立たせる
                     .lineLimit(1...2)
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.6)
@@ -927,7 +945,13 @@ struct ElementManagementView: View {
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 4)
-                                .background(.black.opacity(0.6))
+                                // ▼ ここを変更：isPositive（Positive画面なら緑、Negativeなら赤）に応じて背景色を切り替える
+                                .background(
+                                    (isPositive ? Color("PositiveColor") : Color("NegativeColor"))
+                                        .opacity(0.6) // お好みに応じて 0.6 〜 0.8 で調整してください
+                                )
+                            
+//                                .background(.black.opacity(0.6))
                                 .cornerRadius(6)
                                 .padding(4)
                         }
