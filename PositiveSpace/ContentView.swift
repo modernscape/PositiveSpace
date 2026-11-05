@@ -679,8 +679,9 @@ struct ContentView: View {
                             Image(uiImage: uiImage)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 15, height: 15) // 小さなサムネイルのサイズ
+                                .frame(width: isPositiveStyle ? 16 : 12, height: isPositiveStyle ? 16 : 12) // 小さなサムネイルのサイズ
                                 .clipShape(Circle())          // 丸くクリップ
+                                .grayscale(isPositiveStyle ? 0.0 : 0.9) // ★ Negative（isPositiveがfalse）の時だけモノクロ(1.0)にする
                                 .padding(4)                   // セルの端からの余白
                                 .opacity(0.7)
                             Spacer()
