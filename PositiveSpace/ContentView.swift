@@ -103,6 +103,8 @@ struct ContentView: View {
     // チュートリアル表示フラグ
     @State private var showingTutorialOverlay = false
     
+
+    
     var negativePoints: Int {
         max(0, maxPoints - positivePoints)
     }
@@ -172,7 +174,7 @@ struct ContentView: View {
                                         togglePositiveSelection(id: item.persistentModelID)
                                     } onLongPress: {
                                         editingItem = item
-                                        inputTitle = item.title
+//                                        inputTitle = item.title
                                     }
                                 }
                                 
@@ -210,7 +212,7 @@ struct ContentView: View {
                                         toggleNegativeSelection(id: item.persistentModelID)
                                     } onLongPress: {
                                         editingItem = item
-                                        inputTitle = item.title
+//                                        inputTitle = item.title
                                     }
                                 }
                                 
@@ -301,30 +303,34 @@ struct ContentView: View {
                     hasSeenTutorial = true
                 }
             }
-            .alert("項目を編集", isPresented: Binding(
-                get: { editingItem != nil },
-                set: { if !$0 { editingItem = nil } }
-            )) {
-                TextField("項目名", text: $inputTitle)
-                Button("保存") {
-                    if let item = editingItem, !inputTitle.isEmpty {
-                        item.title = inputTitle
-                        editingItem = nil
-                        inputTitle = ""
-                    }
-                }
-                Button("削除", role: .destructive) {
-                    if let item = editingItem {
-                        modelContext.delete(item)
-                        editingItem = nil
-                        inputTitle = ""
-                    }
-                }
-                Button("キャンセル", role: .cancel) {
-                    editingItem = nil
-                    inputTitle = ""
-                }
+            // 古いアラートの代わりに、ElementManagementView と同じ詳細・編集画面をシート表示する
+            .sheet(item: $editingItem) { item in
+                ElementDetailEditView(item: item)
             }
+//            .alert("項目を編集", isPresented: Binding(
+//                get: { editingItem != nil },
+//                set: { if !$0 { editingItem = nil } }
+//            )) {
+//                TextField("項目名", text: $inputTitle)
+//                Button("保存") {
+//                    if let item = editingItem, !inputTitle.isEmpty {
+//                        item.title = inputTitle
+//                        editingItem = nil
+//                        inputTitle = ""
+//                    }
+//                }
+//                Button("削除", role: .destructive) {
+//                    if let item = editingItem {
+//                        modelContext.delete(item)
+//                        editingItem = nil
+//                        inputTitle = ""
+//                    }
+//                }
+//                Button("キャンセル", role: .cancel) {
+//                    editingItem = nil
+//                    inputTitle = ""
+//                }
+//            }
             .alert("目標を編集", isPresented: $showingEditGoal) {
                 TextField("目標", text: $newGoalText)
                 Button("保存") {
@@ -810,7 +816,7 @@ struct ContentView: View {
     
     private func setupInitialDataIfNeeded() {
         if positiveItems.isEmpty {
-            let defaults = ["良質な睡眠", "高いスキル", "集中", "余白、スペース", "筋トレ", "メリハリ", "主体的", "投資", "リラックス", "柔らかさ", "スピード", "地の利", "ストレッチゾーン", "レバレッジ", "利他", "継続", "ミニマル", "人脈", "ワクワク", "仕組み", "不労", "汎用性", "問題解決", "時間(リソース)"]
+            let defaults = ["良質な睡眠", "高いスキル", "集中", "余白、スペース", "筋トレ", "メリハリ", "主体的", "投資", "リラックス", "柔らかさ", "スピード", "地の利", "ストレッチゾーン", "レバレッジ", "利他", "継続", "ミニマル", "人脈", "ワクワク", "仕組み", "不労", "汎用性", "問題解決", "時間","仮説思考"]
             for title in defaults {
                 modelContext.insert(ElementItem(title: title, isPositive: true))
             }
