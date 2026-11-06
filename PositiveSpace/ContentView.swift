@@ -541,6 +541,13 @@ struct ContentView: View {
         }
     }
     
+    // 1. 長押し状態を追跡する変数
+    @GestureState private var isPositivePressing = false
+    @GestureState private var isNegativePressing = false
+    
+//    @State private var showingClearPositiveAlert = false
+//    @State private var showingClearNegativeAlert = false
+    
     private var gaugeSectionView: some View {
         VStack(spacing: 4) {
             HStack {
@@ -579,7 +586,17 @@ struct ContentView: View {
                         }
                     }
                     .frame(width: max(0, positiveWidth - 2), height: 72)
-                    .onLongPressGesture { showingClearPositiveAlert = true }
+                    // ★ 長押し中にやや薄くする
+                    .opacity(isPositivePressing ? 0.7 : 1.0)
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5)
+                            .updating($isPositivePressing) { currentState, state, _ in
+                                state = currentState
+                            }
+                            .onEnded { _ in
+                                showingClearPositiveAlert = true
+                            }
+                    )
                     
                     ZStack(alignment: .topTrailing) {
                         RoundedRectangle(cornerRadius: 4)
@@ -594,7 +611,18 @@ struct ContentView: View {
                         }
                     }
                     .frame(width: max(0, negativeWidth - 2), height: 72)
-                    .onLongPressGesture { showingClearNegativeAlert = true }
+                    // ★ 長押し中にやや薄くする
+                    .opacity(isNegativePressing ? 0.7 : 1.0)
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5)
+                            .updating($isNegativePressing) { currentState, state, _ in
+                                state = currentState
+                            }
+                            .onEnded { _ in
+                                // 修正: ネガティブ側のアラート変数に修正
+                                showingClearNegativeAlert = true
+                            }
+                    )
                 }
             }
             .frame(height: 72)
@@ -833,20 +861,137 @@ struct ContentView: View {
         }
     }
     
-    private func setupInitialDataIfNeeded() {
+    private func setupInitialDataIfNeeded_old() {
         if positiveItems.isEmpty {
-            let defaults = ["良質な睡眠", "高いスキル", "集中", "余白、スペース", "筋トレ", "メリハリ", "主体的", "投資", "リラックス", "柔らかさ", "スピード", "地の利", "ストレッチゾーン", "レバレッジ", "利他", "継続", "ミニマル", "人脈", "ワクワク", "仕組み", "不労", "汎用性", "問題解決", "時間","仮説思考"]
+//            let defaults = ["良質な睡眠", "高いスキル", "集中", "余白、スペース", "筋トレ", "メリハリ", "主体的", "投資", "リラックス", "柔らかさ", "スピード", "地の利", "ストレッチゾーン", "レバレッジ", "利他", "継続", "ミニマル", "人脈", "ワクワク", "仕組み", "不労", "汎用性", "問題解決", "時間","仮説思考"]
+            let defaults = ["良質な睡眠", "集中", "余白、スペース", "筋トレ", "メリハリ", "主体的", "スピード", "レバレッジ", "継続", "ワクワク", "仕組み"]
+            
             for title in defaults {
                 modelContext.insert(ElementItem(title: title, isPositive: true))
             }
         }
         if negativeItems.isEmpty {
-            let defaults = ["ノイズ", "短い睡眠", "反応的", "硬い", "時間がかかる", "コンフォートゾーン", "プロクラスティネーション", "モノが多い", "散漫", "利己", "頭でっかち", "退屈", "混雑"]
+//            let defaults = ["ノイズ", "短い睡眠", "反応的", "硬い", "時間がかかる", "コンフォートゾーン", "プロクラスティネーション", "モノが多い", "散漫", "利己", "頭でっかち", "退屈", "混雑"]
+            let defaults = ["ノイズ", "短い睡眠", "反応的", "時間がかかる", "コンフォートゾーン", "プロクラスティネーション", "モノが多い", "利己", "頭でっかち", "退屈", "混雑"]
+            
             for title in defaults {
                 modelContext.insert(ElementItem(title: title, isPositive: false))
             }
         }
     }
+    
+    private func setupInitialDataIfNeeded() {
+        if positiveItems.isEmpty {
+            // Positive項目の「タイトル」と、アセットの「画像名」をペアで定義
+            let defaultPositiveItems: [(title: String, imageName: String)] = [
+                ("良質な睡眠", ""),
+                ("高いスキル", ""),
+                ("集中", "p_01"),
+                ("余白、スペース", "p_02"),
+                ("筋トレ", "p_03"),
+                ("メリハリ", "p_04"),
+                ("主体的", ""),
+                ("スピード", ""),
+                ("レバレッジ", "p_05"),
+                ("継続", "p_06"),
+                ("ワクワク", "p_07"),
+                ("仕組み", ""),
+                ("かっこいい", "p_08"),
+                // 必要に応じて他の項目と画像名を設定してください
+                // (※画像名が未設定のものはデフォルト画像なしにする、などの分岐も可能です)
+            ]
+            
+            for itemData in defaultPositiveItems {
+                var imageData: Data? = nil
+                
+                // imageNameが空文字でなければ、画像を取得してDataに変換
+                if !itemData.imageName.isEmpty {
+                    if let uiImage = UIImage(named: itemData.imageName) {
+                        imageData = uiImage.jpegData(compressionQuality: 0.8)
+                    }
+                }
+                
+                modelContext.insert(ElementItem(
+                    title: itemData.title,
+                    isPositive: true,
+                    imageData: imageData // ★ 空文字なら nil が入る
+                ))
+            }
+            
+            // 上記リストに含まれなかった残りのデフォルト項目を一括追加したい場合のフォールバック
+//            let remainingDefaults = ["筋トレ", "メリハリ", "主体的", "投資", "リラックス", "柔らかさ", "スピード", "地の利", "ストレッチゾーン", "レバレッジ", "利他", "継続", "ミニマル", "人脈", "ワクワク", "仕組み", "不労", "汎用性", "問題解決", "時間(リソース)"]
+//            for title in remainingDefaults {
+//                // まだ登録していないタイトルだけ追加
+//                if !defaultPositiveItems.contains(where: { $0.title == title }) {
+//                    modelContext.insert(ElementItem(title: title, isPositive: true))
+//                }
+//            }
+        }
+        
+        if negativeItems.isEmpty {
+            // Negative側も同様にペアで定義できます
+            let defaultNegativeItems: [(title: String, imageName: String)] = [
+                ("ノイズ", "n_01"),
+                ("短い睡眠", "n_02"),
+                ("反応的", "n_03"),
+                ("硬い", "n_04"),
+                ("時間がかかる", "n_05"),
+                ("コンフォートゾーン", "n_06"),
+                ("プロクラスティネーション", "n_07"),
+                ("モノが多い", "n_08"),
+                ("混雑", "n_09"),
+                ("退屈", "n_10"),
+                ("利己", "n_11"),
+            ]
+            
+//            for itemData in defaultNegativeItems {
+//                let uiImage = UIImage(named: itemData.imageName)
+//                let imageData = uiImage?.jpegData(compressionQuality: 0.8)
+//                
+//                modelContext.insert(ElementItem(
+//                    title: itemData.title,
+//                    isPositive: false,
+//                    imageData: imageData
+//                ))
+//            }
+//            
+            for itemData in defaultNegativeItems {
+                var imageData: Data? = nil
+                
+                // imageNameが空文字でなければ、画像を取得してDataに変換
+                if !itemData.imageName.isEmpty {
+                    if let uiImage = UIImage(named: itemData.imageName) {
+                        imageData = uiImage.jpegData(compressionQuality: 0.8)
+                    }
+                }
+                
+                modelContext.insert(ElementItem(
+                    title: itemData.title,
+                    isPositive: true,
+                    imageData: imageData // ★ 空文字なら nil が入る
+                ))
+            }
+            
+//            let remainingNegativeDefaults = ["ノイズ", "短い睡眠", "反応的", "時間がかかる", "コンフォートゾーン", "プロクラスティネーション", "モノが多い", "利己", "頭でっかち", "退屈", "混雑"]
+//            for title in remainingNegativeDefaults {
+//                if !defaultNegativeItems.contains(where: { $0.title == title }) {
+//                    modelContext.insert(ElementItem(title: title, isPositive: false))
+//                }
+//            }
+        }
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 }
 
 // MARK: - チュートリアルカードビュー
