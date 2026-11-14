@@ -65,8 +65,8 @@ struct ContentView: View {
     private var histories: [HistoryItem]
     
     // データ保存
-    @AppStorage("targetGoal") private var targetGoal = "月収100万円"
-    @AppStorage("targetDateString") private var targetDateString = "2026/11/03"
+    @AppStorage("targetGoal") private var targetGoal = "月収◯◯◯万円"
+    @AppStorage("targetDateString") private var targetDateString = "2026/12/31"
     @AppStorage("positivePoints") private var positivePoints: Int = 0
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
     let maxPoints: Int = 200
@@ -967,7 +967,7 @@ struct ContentView: View {
                 
                 modelContext.insert(ElementItem(
                     title: itemData.title,
-                    isPositive: true,
+                    isPositive: false,
                     imageData: imageData // ★ 空文字なら nil が入る
                 ))
             }
