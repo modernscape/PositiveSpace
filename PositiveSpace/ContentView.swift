@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import GoogleMobileAds
+import AppTrackingTransparency
 
 // MARK: - SwiftData モデル定義（安全なマイグレーション対応版）
 
@@ -237,12 +239,14 @@ struct ContentView: View {
                                 cachedPreviewImageData = nil
                             }
                         }
+                        .withAdMobBanner() 
                         
                         // 6. Negative フッター
                         negativeFooterView(titleWidth: halfWidth)
                             .padding(.horizontal)
                             .padding(.bottom, 8)
                     }
+    
                     
                     // ── 選択された項目の画像を画面左上に表示 ──
                     VStack {
@@ -387,6 +391,24 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingNegativeListModal) {
                 ElementManagementView(isPositive: false)
+            }
+            .onAppear {
+                requestTrackingAndInitializeAds()
+            }
+        }
+    }
+    
+    private func requestTrackingAndInitializeAds() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ATTrackingManager.requestTrackingAuthorization { status in
+                
+                // ★ ここに「あなたの実機のテストデバイスID」を登録する
+                // シミュレータの場合は自動でテスト広告になるため追加不要です
+                MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [
+                    "322dcfafac9fe6cac54edd0096dad3eb" // ここにXcodeのコンソールに出る英数字のIDを入れる
+                ]
+                
+                MobileAds.shared.start(completionHandler: nil)
             }
         }
     }
@@ -1110,7 +1132,7 @@ struct ElementManagementView: View {
                 }
                 .padding()
             }
-            .navigationTitle(isPositive ? "Positive 項目一覧" : "Negative 項目一覧")
+            .navigationTitle(isPositive ? "Positive 項目リスト" : "Negative 項目リスト")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
