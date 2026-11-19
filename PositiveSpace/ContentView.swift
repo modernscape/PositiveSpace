@@ -274,6 +274,9 @@ struct ContentView: View {
                         flyingItems: flyingItems,
                         containerSize: CGSize(width: fullWidth, height: fullHeight)
                     )
+                } // ZStack
+                .onAppear {
+                    requestTrackingAndInitializeAds()
                 }
             }
             .overlay(
@@ -392,23 +395,21 @@ struct ContentView: View {
             .sheet(isPresented: $showingNegativeListModal) {
                 ElementManagementView(isPositive: false)
             }
-            .onAppear {
-                requestTrackingAndInitializeAds()
-            }
+            
         }
     }
     
     private func requestTrackingAndInitializeAds() {
+        // 1. まず最初にテスト端末IDを同期的に設定する
+        MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [
+            "322dcfafac9fe6cac54edd0096dad3eb"
+        ]
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            ATTrackingManager.requestTrackingAuthorization { status in
-                
-                // ★ ここに「あなたの実機のテストデバイスID」を登録する
-                // シミュレータの場合は自動でテスト広告になるため追加不要です
-                MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [
-                    "322dcfafac9fe6cac54edd0096dad3eb" // ここにXcodeのコンソールに出る英数字のIDを入れる
-                ]
-                
-                MobileAds.shared.start(completionHandler: nil)
+            ATTrackingManager.requestTrackingAuthorization { _ in
+                DispatchQueue.main.async {
+                    MobileAds.shared.start(completionHandler: nil)
+                }
             }
         }
     }
