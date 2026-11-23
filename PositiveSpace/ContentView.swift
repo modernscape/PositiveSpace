@@ -144,7 +144,7 @@ struct ContentView: View {
                 let halfWidth = fullWidth * 0.45
                 
                 ZStack {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 0) {
                         // 1. 目標・期限ヘッダー（右上に "text.pad.header" アイコンのボタンを配置）
                         ZStack(alignment: .trailing) {
                             targetHeaderView
@@ -229,6 +229,7 @@ struct ContentView: View {
                             }
                             .padding(.horizontal)
                             .padding(.top, 4)
+                            .padding(.bottom, 6) // スクロール最下部まで行った時の最低限の余白
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -239,13 +240,23 @@ struct ContentView: View {
                                 cachedPreviewImageData = nil
                             }
                         }
-                        .withAdMobBanner() 
+//                        .withAdMobBanner()
+                        
+                        // ★ .withAdMobBanner() を消して、代わりにここへ直接配置する
+//                        AdMobBannerView()
+                        AdMobBannerView(width: max(0, fullWidth - 32))
+                            .frame(width: max(0, fullWidth - 32), height: 50)
+//                            .frame(minWidth: 0, maxWidth: .infinity)
+                            .frame(height: 50)
+//                            .fixedSize(horizontal: false, vertical: true) // ★ 縦方向が押し潰されるのを防ぐ
+                            .clipped() // 万が一のはみ出しを防止
                         
                         // 6. Negative フッター
                         negativeFooterView(titleWidth: halfWidth)
                             .padding(.horizontal)
                             .padding(.bottom, 8)
                     }
+                    .frame(width: fullWidth) // ★ 親のGeometryReaderの幅に完全固定する
     
                     
                     // ── 選択された項目の画像を画面左上に表示 ──
@@ -399,16 +410,22 @@ struct ContentView: View {
         }
     }
     
-    private func requestTrackingAndInitializeAds() {
-        // 1. まず最初にテスト端末IDを同期的に設定する
+    private func requestTrackingAndInitializeAds(completion: @escaping () -> Void = {}) {
         MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [
+            "04badc8f0fdaf861053006aa4c6341ed",
             "322dcfafac9fe6cac54edd0096dad3eb"
         ]
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             ATTrackingManager.requestTrackingAuthorization { _ in
                 DispatchQueue.main.async {
-                    MobileAds.shared.start(completionHandler: nil)
+                    MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [
+                        "04badc8f0fdaf861053006aa4c6341ed",
+                        "322dcfafac9fe6cac54edd0096dad3eb"
+                    ]
+                    MobileAds.shared.start { _ in
+                        completion()
+                    }
                 }
             }
         }
@@ -517,7 +534,7 @@ struct ContentView: View {
             HStack {
                 Button(action: { applyPositiveDecreaseAction() }) {
                     Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 30))
+                        .font(.system(size: 24))
                         .foregroundColor(.gray)
                 }
                 .disabled(selectedPositiveIDs.isEmpty)
@@ -527,7 +544,7 @@ struct ContentView: View {
                 
                 Button(action: { applyPositiveIncreaseAction() }) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 66))
+                        .font(.system(size: 48))
                         .foregroundColor(Color("PositiveColor"))
                 }
                 .disabled(selectedPositiveIDs.isEmpty)
@@ -539,7 +556,7 @@ struct ContentView: View {
                 Text("Positive")
                     .foregroundColor(Color("PositiveColor"))
                     .bold()
-                    .frame(width: titleWidth, height: 40)
+                    .frame(width: titleWidth, height: 34)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color(.systemBackground))
@@ -657,7 +674,7 @@ struct ContentView: View {
             HStack {
                 Button(action: { applyNegativeDecreaseAction() }) {
                     Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 66))
+                        .font(.system(size: 48))
                         .foregroundColor(Color("NegativeColor"))
                 }
                 .disabled(selectedNegativeIDs.isEmpty)
@@ -667,7 +684,7 @@ struct ContentView: View {
                 
                 Button(action: { applyNegativeIncreaseAction() }) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 30))
+                        .font(.system(size: 24))
                         .foregroundColor(.gray)
                 }
                 .disabled(selectedNegativeIDs.isEmpty)
@@ -679,7 +696,7 @@ struct ContentView: View {
                 Text("Negative")
                     .foregroundColor(Color("NegativeColor"))
                     .bold()
-                    .frame(width: titleWidth, height: 40)
+                    .frame(width: titleWidth, height: 34)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color(.systemBackground))
