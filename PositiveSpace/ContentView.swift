@@ -105,8 +105,6 @@ struct ContentView: View {
     // チュートリアル表示フラグ
     @State private var showingTutorialOverlay = false
     
-
-    
     var negativePoints: Int {
         max(0, maxPoints - positivePoints)
     }
@@ -136,6 +134,31 @@ struct ContentView: View {
         return cachedPreviewImageData
     }
     
+    @State private var showingResetCountsAlert = false
+    
+    
+    
+    private func resetAllCounts() {
+        withAnimation {
+            // 1. ポジカウントを0に
+            positivePoints = 0
+            
+            // 2. Positive・Negative 各項目のカウントを0に
+            for item in positiveItems {
+                item.count = 0
+            }
+            for item in negativeItems {
+                item.count = 0
+            }
+            
+            // 選択状態やプレビューもクリアしたい場合はあわせてリセット
+            selectedPositiveIDs.removeAll()
+            selectedNegativeIDs.removeAll()
+            selectedOrderIDs.removeAll()
+            cachedPreviewImageData = nil
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             GeometryReader { outerGeometry in
@@ -145,21 +168,31 @@ struct ContentView: View {
                 
                 ZStack {
                     VStack(spacing: 0) {
-                        // 1. 目標・期限ヘッダー（右上に "text.pad.header" アイコンのボタンを配置）
+                        // 1. 目標・期限ヘッダー（右上にチュートリアルボタンと設定ボタンを並べて配置）
                         ZStack(alignment: .trailing) {
                             targetHeaderView
                                 .frame(maxWidth: .infinity)
-                            
-                            Button(action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                    showingTutorialOverlay = true
+
+                            HStack(spacing: 10) {
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        showingTutorialOverlay = true
+                                    }
+                                }) {
+                                    Image(systemName: "document.circle.fill")
+                                        .font(.system(size: 22))
+                                        .foregroundColor(.primary.opacity(0.7))
                                 }
-                            }) {
-                                Image(systemName: "document.circle.fill") //
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.primary.opacity(0.7))
-                                    .padding(.trailing, 4)
+                                
+                                Button(action: {
+                                    showingResetCountsAlert = true
+                                }) {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(.system(size: 22))
+                                        .foregroundColor(.primary.opacity(0.7))
+                                }
                             }
+                            .padding(.trailing, 4)
                         }
                         .padding(.horizontal)
                         .padding(.top, 4)
@@ -240,16 +273,16 @@ struct ContentView: View {
                                 cachedPreviewImageData = nil
                             }
                         }
-//                        .withAdMobBanner()
+                        .withAdMobBanner()
                         
                         // ★ .withAdMobBanner() を消して、代わりにここへ直接配置する
-//                        AdMobBannerView()
-                        AdMobBannerView(width: max(0, fullWidth - 32))
-                            .frame(width: max(0, fullWidth - 32), height: 50)
-//                            .frame(minWidth: 0, maxWidth: .infinity)
-                            .frame(height: 50)
-//                            .fixedSize(horizontal: false, vertical: true) // ★ 縦方向が押し潰されるのを防ぐ
-                            .clipped() // 万が一のはみ出しを防止
+
+//                        AdMobBannerView(width: max(0, fullWidth - 32))
+//                            .frame(width: max(0, fullWidth - 32), height: 50)
+////                            .frame(minWidth: 0, maxWidth: .infinity)
+//                            .frame(height: 50)
+////                            .fixedSize(horizontal: false, vertical: true) // ★ 縦方向が押し潰されるのを防ぐ
+//                            .clipped() // 万が一のはみ出しを防止
                         
                         // 6. Negative フッター
                         negativeFooterView(titleWidth: halfWidth)
@@ -266,15 +299,15 @@ struct ContentView: View {
                                 Image(uiImage: uiImage)
                                     .resizable()
                                     .scaledToFit()
-                                    .frame(width: 50, height: 50)
+                                    .frame(width: 45, height: 45)
                                     .clipped()
                                     .shadow(radius: 4)
                                     .transition(.scale.combined(with: .opacity))
                             }
                             Spacer()
                         }
-                        .padding(.leading, 16)
-                        .padding(.top, 4)
+                        .padding(.leading, 30)
+                        .padding(.top, 8) // ★ グレーのマイナスボタンに被らないよう上寄りに調整
                         Spacer()
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: activePreviewImageData != nil)
@@ -325,30 +358,7 @@ struct ContentView: View {
             .sheet(item: $editingItem) { item in
                 ElementDetailEditView(item: item)
             }
-//            .alert("項目を編集", isPresented: Binding(
-//                get: { editingItem != nil },
-//                set: { if !$0 { editingItem = nil } }
-//            )) {
-//                TextField("項目名", text: $inputTitle)
-//                Button("保存") {
-//                    if let item = editingItem, !inputTitle.isEmpty {
-//                        item.title = inputTitle
-//                        editingItem = nil
-//                        inputTitle = ""
-//                    }
-//                }
-//                Button("削除", role: .destructive) {
-//                    if let item = editingItem {
-//                        modelContext.delete(item)
-//                        editingItem = nil
-//                        inputTitle = ""
-//                    }
-//                }
-//                Button("キャンセル", role: .cancel) {
-//                    editingItem = nil
-//                    inputTitle = ""
-//                }
-//            }
+
             .alert("目標を編集", isPresented: $showingEditGoal) {
                 TextField("目標", text: $newGoalText)
                 Button("保存") {
@@ -373,6 +383,14 @@ struct ContentView: View {
                 Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("Negative側の履歴文字をすべてクリアしますか？")
+            }
+            .alert("カウントのリセット", isPresented: $showingResetCountsAlert) {
+                Button("リセットする", role: .destructive) {
+                    resetAllCounts()
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("全てのポイントをリセットしますか？")
             }
             .sheet(isPresented: $showingEditDate) {
                 VStack(spacing: 20) {
@@ -468,6 +486,39 @@ struct ContentView: View {
     
     // MARK: - 各パーツ
     
+//    private var targetHeaderView: some View {
+//        VStack(alignment: .center, spacing: 2) {
+//            Button(action: {
+//                newGoalText = targetGoal
+//                showingEditGoal = true
+//            }) {
+//                Text("目標 : \(targetGoal)")
+//                    .font(.system(size: 32, weight: .bold))
+//                    .foregroundColor(.primary)
+//            }
+//            
+//            Button(action: {
+//                let formatter = DateFormatter()
+//                formatter.dateFormat = "yyyy/MM/dd"
+//                selectedDate = formatter.date(from: targetDateString) ?? Date()
+//                showingEditDate = true
+//            }) {
+//                HStack(spacing: 12) {
+//                    Text("期限 : \(targetDateString)")
+//                        .font(.subheadline)
+//                        .bold()
+//                        .foregroundColor(.primary)
+//                    Text("(残り: \(remainingDateText))")
+//                        .font(.subheadline)
+//                        .bold()
+//                        .foregroundColor(.secondary)
+//                }
+//            }
+//        }
+//        .frame(maxWidth: .infinity)
+//    }
+    
+    
     private var targetHeaderView: some View {
         VStack(alignment: .center, spacing: 2) {
             Button(action: {
@@ -475,8 +526,10 @@ struct ContentView: View {
                 showingEditGoal = true
             }) {
                 Text("目標 : \(targetGoal)")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             
             Button(action: {
@@ -485,21 +538,21 @@ struct ContentView: View {
                 selectedDate = formatter.date(from: targetDateString) ?? Date()
                 showingEditDate = true
             }) {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     Text("期限 : \(targetDateString)")
-                        .font(.subheadline)
-                        .bold()
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.primary)
                     Text("(残り: \(remainingDateText))")
-                        .font(.subheadline)
-                        .bold()
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
             }
         }
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, 68) // 右上2つのボタンと重ならないよう余白を確保
     }
-    
     // 残り日数を「◯年◯月◯日」形式にし、0の項目は省略する
     private var remainingDateText: String {
         let formatter = DateFormatter()
@@ -1034,32 +1087,36 @@ struct ContentView: View {
     
 }
 
+
 // MARK: - チュートリアルカードビュー
 struct TutorialCardView: View {
     var onClose: () -> Void
     
     var body: some View {
         ZStack {
+            Color.black.opacity(0.65)
+                .ignoresSafeArea()
+            
             Image("Tutorial Image")
                 .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
+                .scaledToFit()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 24)
             
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 Text("「Positive Space」へようこそ！")
                     .font(.title2)
                     .bold()
                     .foregroundColor(.white)
-                    .shadow(radius: 2)
+                    .shadow(color: .black.opacity(0.7), radius: 3)
                 
                 Text("画面をタップして閉じる")
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.9))
-                    .shadow(radius: 2)
+                    .foregroundColor(.white.opacity(0.95))
+                    .shadow(color: .black.opacity(0.7), radius: 3)
             }
+            .padding(.horizontal, 12)
+            .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
